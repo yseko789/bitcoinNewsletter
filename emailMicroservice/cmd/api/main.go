@@ -4,12 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"sync"
 	"time"
 
+	// "cloud.google.com/go/cloudsqlconn"
+	// "cloud.google.com/go/cloudsqlconn/postgres/pgxv4"
+
+	"cloud.google.com/go/cloudsqlconn"
+	"cloud.google.com/go/cloudsqlconn/postgres/pgxv4"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/yseko789/bitcoinNewsletter/internal/data"
@@ -51,7 +57,7 @@ func main() {
 	}
 
 	var cfg config
-	flag.IntVar(&cfg.port, "port", 4000, "API server port")
+	flag.IntVar(&cfg.port, "port", 8080, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 
 	flag.StringVar(&cfg.db.dsn, "db-dsn", os.Getenv("DSN"), "PostgreSQL DSN")
@@ -59,12 +65,6 @@ func main() {
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle time")
-
-	// flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
-	// flag.IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
-	// flag.StringVar(&cfg.smtp.username, "smtp-username", "afc0142445c062", "SMTP username")
-	// flag.StringVar(&cfg.smtp.password, "smtp-password", "cdc80cefc47a4b", "SMTP password")
-	// flag.StringVar(&cfg.smtp.sender, "smtp-sender", "yseko789 <no-reply@github.com/yseko789>", "SMTP sender")
 
 	flag.StringVar(&cfg.smtp.host, "smtp-host", "smtp.gmail.com", "SMTP hsot")
 	flag.IntVar(&cfg.smtp.port, "smpt-port", 587, "SMTP port")
@@ -101,11 +101,20 @@ func main() {
 }
 
 func openDB(cfg config) (*sql.DB, error) {
-	db, err := sql.Open("postgres", cfg.db.dsn)
+	cleanup, err := pgxv4.RegisterDriver("cloudsql-postgres", cloudsqlconn.WithIAMAuthN())
 	if err != nil {
 		return nil, err
 	}
+	defer cleanup()
 
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable", os.Getenv("connectionName"), os.Getenv("user"), os.Getenv("password"), os.Getenv("dbname"))
+	db, err := sql.Open(
+		"cloudsql-postgres",
+		dsn,
+	)
+	if err != nil {
+		return nil, err
+	}
 	db.SetMaxOpenConns(cfg.db.maxOpenConns)
 	db.SetMaxIdleConns(cfg.db.maxIdleConns)
 	db.SetConnMaxIdleTime(cfg.db.maxIdleTime)

@@ -130,3 +130,30 @@ func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Reque
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) sendDailyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	emails, err := app.models.Users.GetAllEmails()
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.background(func() {
+		data := map[string]any{
+			"summaryDate": "01/01/25",
+			"summary":     "abcdefghijklmnopqrstuv",
+		}
+
+		for _, email := range emails {
+			err = app.mailer.Send(*email, "newsletter.tmpl", data)
+			if err != nil {
+				app.logger.Error(err.Error())
+			}
+		}
+	})
+
+	err = app.writeJSON(w, http.StatusAccepted, nil, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}

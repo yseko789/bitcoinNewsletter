@@ -1,0 +1,6 @@
+version: "3"
+services:
+  app: 
+    image: email-service 
+    ports:
+      - 8080:8080

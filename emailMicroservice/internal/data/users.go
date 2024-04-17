@@ -207,3 +207,35 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 
 	return &user, nil
 }
+
+func (m UserModel) GetAllEmails() ([]*string, error) {
+	query := `
+		SELECT email
+		FROM users`
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	emails := []*string{}
+
+	for rows.Next() {
+		var email string
+
+		err := rows.Scan(&email)
+		if err != nil {
+			return nil, err
+		}
+		emails = append(emails, &email)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return emails, nil
+}

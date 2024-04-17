@@ -13,6 +13,7 @@ func (app *application) routes() http.Handler {
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodPost, "/v1/users", app.registerUserHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/users", app.sendDailyEmailHandler)
 	router.HandlerFunc(http.MethodPut, "/v1/users/activated", app.activateUserHandler)
 
 	return app.recoverPanic(router)
