@@ -97,13 +97,19 @@ type chatgptRequest struct {
 	Model    string    `json:"model"`
 	Messages []message `json:"messages"`
 }
+type choice struct {
+	Message message `json:"message"`
+}
+type chatgptResponse struct {
+	Choices []choice `json:"choices"`
+}
 
-func (app *application) chatGPTSummarize() {
-	url := "https://api.openai.com/v1/chat/completions/"
+func (app *application) chatGPTSummarize() string {
+	url := "https://api.openai.com/v1/chat/completions"
 	apikey := os.Getenv("chatgptkey")
 	messageReq := message{
 		Role:    "user",
-		Content: "What is the national anthem of japan?",
+		Content: "What is the bitcoin halving?",
 	}
 	messagesReq := []message{messageReq}
 	chatgptRequest := chatgptRequest{
@@ -125,5 +131,16 @@ func (app *application) chatGPTSummarize() {
 	resp, err := client.Do(req)
 	if err != nil {
 		app.logger.Error(fmt.Sprintf("%v", err))
+		return err.Error()
 	}
+
+	chatgptResponse := chatgptResponse{}
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&chatgptResponse)
+	if err != nil {
+		app.logger.Error(fmt.Sprintf("%v", err))
+		return err.Error()
+	}
+	responseContent := chatgptResponse.Choices[0].Message.Content
+	return responseContent
 }

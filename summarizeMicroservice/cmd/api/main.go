@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	firebase "firebase.google.com/go"
+	"cloud.google.com/go/firestore"
 	"github.com/joho/godotenv"
 	"github.com/yseko789/bitcoinSummarize/internal/data"
 )
@@ -39,16 +39,8 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	ctx := context.Background()
-	conf := &firebase.Config{ProjectID: os.Getenv("projectID")}
-	log.Print(os.Getenv("projectID"))
-	firebaseApp, err := firebase.NewApp(ctx, conf)
-	// sa := option.WithCredentialsFile(os.Getenv("credentials"))
-	// firebaseApp, err := firebase.NewApp(ctx, nil, sa)
-	if err != nil {
-		log.Fatalln(err)
-	}
 
-	client, err := firebaseApp.Firestore(ctx)
+	client, err := firestore.NewClient(ctx, os.Getenv("projectID"))
 	if err != nil {
 		log.Fatalln(err)
 	}
