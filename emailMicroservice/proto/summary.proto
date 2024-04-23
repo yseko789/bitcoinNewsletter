@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package bitcoinNewsletter;
+
+option go_package = "github.com/yseko789/bitcoinNewsletter";
+
+message Summary {
+    string date = 1;
+    string content = 2;
+}
+
+message Date {
+    string date = 1;
+}
+
+service SummaryService {
+    rpc ReadSummary (Date) returns (Summary);
+}

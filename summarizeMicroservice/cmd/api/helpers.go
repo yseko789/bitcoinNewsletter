@@ -3,12 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type envelope map[string]any
@@ -32,61 +31,16 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data envelo
 	return nil
 }
 
-func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	maxBytes := 1_048_576
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
-
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-
-	err := dec.Decode(dst)
-	if err != nil {
-		var syntaxError *json.SyntaxError
-		var unmarshalTypeError *json.UnmarshalTypeError
-		var invalidUnmarshalError *json.InvalidUnmarshalError
-		var maxBytesError *http.MaxBytesError
-
-		switch {
-		case errors.As(err, &syntaxError):
-			return fmt.Errorf("body contains badly-formed JSON (at character %d)", syntaxError.Offset)
-		case errors.Is(err, io.ErrUnexpectedEOF):
-			return errors.New("body contains badly-formed JSON")
-		case errors.As(err, &unmarshalTypeError):
-			if unmarshalTypeError.Field != "" {
-				return fmt.Errorf("body contains incorrect JSON type for field %q", unmarshalTypeError.Field)
-			}
-			return fmt.Errorf("body contains incorrect JSON type (at character %d)", unmarshalTypeError.Offset)
-		case errors.Is(err, io.EOF):
-			return errors.New("body must not be empty")
-		case strings.HasPrefix(err.Error(), "json: unknown field "):
-			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
-			return fmt.Errorf("body contains unknown key %s", fieldName)
-		case errors.As(err, &maxBytesError):
-			return fmt.Errorf("body must not be larger than %d bytes", maxBytesError.Limit)
-		case errors.As(err, &invalidUnmarshalError):
-			panic(err)
-		default:
-			return err
-		}
-	}
-	err = dec.Decode(&struct{}{})
-	if !errors.Is(err, io.EOF) {
-		return errors.New("body must only contain a single JSON value")
-	}
-	return nil
+func (app *application) yesterdaysDateString() string {
+	loc, _ := time.LoadLocation("America/New_York")
+	yesterday := time.Now().In(loc).AddDate(0, 0, -1).Format("2006-01-02")
+	return yesterday
 }
 
-func (app *application) background(fn func()) {
-	app.wg.Add(1)
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				app.logger.Error(fmt.Sprintf("%v", err))
-			}
-		}()
-
-		fn()
-	}()
+func (app *application) dayBeforeYesterdayDateString() string {
+	loc, _ := time.LoadLocation("America/New_York")
+	beforeYesterday := time.Now().In(loc).AddDate(0, 0, -2).Format("2006-01-02")
+	return beforeYesterday
 }
 
 type message struct {
@@ -104,12 +58,14 @@ type chatgptResponse struct {
 	Choices []choice `json:"choices"`
 }
 
-func (app *application) chatGPTSummarize() string {
+func (app *application) chatGPTSummarize(newsURLs []string) (string, error) {
 	url := "https://api.openai.com/v1/chat/completions"
 	apikey := os.Getenv("chatgptkey")
+
+	contentString := strings.Join(newsURLs[:], " ")
 	messageReq := message{
 		Role:    "user",
-		Content: "What is the bitcoin halving?",
+		Content: fmt.Sprintf("For each article, summarize the main points: %s", contentString),
 	}
 	messagesReq := []message{messageReq}
 	chatgptRequest := chatgptRequest{
@@ -124,6 +80,7 @@ func (app *application) chatGPTSummarize() string {
 	req, err := http.NewRequest("POST", url, payloadBuf)
 	if err != nil {
 		app.logger.Error(fmt.Sprintf("%v", err))
+		return "", err
 	}
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", apikey))
@@ -131,7 +88,7 @@ func (app *application) chatGPTSummarize() string {
 	resp, err := client.Do(req)
 	if err != nil {
 		app.logger.Error(fmt.Sprintf("%v", err))
-		return err.Error()
+		return "", err
 	}
 
 	chatgptResponse := chatgptResponse{}
@@ -139,8 +96,47 @@ func (app *application) chatGPTSummarize() string {
 	err = dec.Decode(&chatgptResponse)
 	if err != nil {
 		app.logger.Error(fmt.Sprintf("%v", err))
-		return err.Error()
+		return "", err
 	}
 	responseContent := chatgptResponse.Choices[0].Message.Content
-	return responseContent
+	return responseContent, nil
+}
+
+type article struct {
+	Author string `json:"author"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+}
+type newsResponse struct {
+	Status       string    `json:"status"`
+	TotalResults int       `json:"totalResults"`
+	Articles     []article `json:"articles"`
+}
+
+func (app *application) getNews(fromDate string, toDate string) (*newsResponse, error) {
+	url := "https://newsapi.org/v2/everything?q=bitcoin&searchIn=title&sortBy=popularity&language=en&from=fromDate&to=toDate&pageSize=5"
+
+	newsapi_key := os.Getenv("newskey")
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		app.logger.Error(fmt.Sprintf("%v", err))
+	}
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", newsapi_key)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		app.logger.Error(fmt.Sprintf("%v", err))
+		return nil, err
+	}
+	newsResponse := newsResponse{}
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&newsResponse)
+	if err != nil {
+		app.logger.Error(fmt.Sprintf("%v", err))
+		return nil, err
+	}
+	return &newsResponse, nil
 }

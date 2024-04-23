@@ -4,3 +4,5 @@ services:
     image: email-service 
     ports:
       - 8080:8080
+      - 4040:4040
+      - 443:443

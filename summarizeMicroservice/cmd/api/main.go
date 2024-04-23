@@ -45,7 +45,6 @@ func main() {
 		log.Fatalln(err)
 	}
 	defer client.Close()
-
 	logger.Info("firestore connection pool established")
 
 	app := &application{
@@ -59,5 +58,4 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-
 }

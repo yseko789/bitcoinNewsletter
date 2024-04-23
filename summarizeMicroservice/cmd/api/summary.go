@@ -2,49 +2,40 @@ package main
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/yseko789/bitcoinSummarize/internal/data"
 )
 
 func (app *application) insertSummaryHandler(w http.ResponseWriter, r *http.Request) {
 
-	randomSummary := app.chatGPTSummarize()
-	summary := &data.Summary{
-		Content: randomSummary,
+	news, err := app.getNews(app.yesterdaysDateString(), app.dayBeforeYesterdayDateString())
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
 	}
-	loc, _ := time.LoadLocation("America/New_York")
-	yesterday := time.Now().In(loc).AddDate(0, 0, -1).Format("2006-01-02")
-	err := app.models.Summary.Insert(summary, yesterday)
+	var newsURLs []string
+	for _, n := range news.Articles {
+		newsURLs = append(newsURLs, n.URL)
+	}
+
+	summaryResponse, err := app.chatGPTSummarize(newsURLs)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	summary := &data.Summary{
+		Content: summaryResponse,
+	}
+
+	err = app.models.Summary.Insert(summary, app.yesterdaysDateString())
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusAccepted, envelope{"date": yesterday}, nil)
+	err = app.writeJSON(w, http.StatusAccepted, envelope{"date": app.yesterdaysDateString()}, nil)
 	if err != nil {
 		app.logger.Error(err.Error())
 	}
 
-}
-
-func (app *application) getLatestSummaryHandler(w http.ResponseWriter, r *http.Request) {
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	summary, err := app.models.Summary.GetByDate(yesterday)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"summary": summary}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
-}
-
-func (app *application) testChatgptHandler(w http.ResponseWriter, r *http.Request) {
-	status := app.chatGPTSummarize()
-	err := app.writeJSON(w, http.StatusOK, envelope{"status": status}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
 }

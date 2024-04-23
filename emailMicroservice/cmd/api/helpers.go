@@ -6,22 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
-
-	"github.com/julienschmidt/httprouter"
+	"time"
 )
-
-func (app *application) readIDParam(r *http.Request) (int64, error) {
-	params := httprouter.ParamsFromContext(r.Context())
-
-	id, err := strconv.ParseInt(params.ByName("id"), 10, 64)
-	if err != nil || id < 1 {
-		return 0, errors.New("invalid id parameter")
-	}
-
-	return id, nil
-}
 
 type envelope map[string]any
 
@@ -99,4 +86,10 @@ func (app *application) background(fn func()) {
 
 		fn()
 	}()
+}
+
+func (app *application) yesterdaysDateString() string {
+	loc, _ := time.LoadLocation("America/New_York")
+	yesterday := time.Now().In(loc).AddDate(0, 0, -1).Format("2006-01-02")
+	return yesterday
 }

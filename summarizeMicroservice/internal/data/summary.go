@@ -23,19 +23,3 @@ func (m SummaryModel) Insert(summary *Summary, date string) error {
 	}
 	return nil
 }
-
-func (m SummaryModel) GetByDate(date string) (*Summary, error) {
-
-	summaries := m.client.Collection("summaries")
-	docsnap, err := summaries.Doc(date).Get(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	var summary Summary
-	err = docsnap.DataTo(&summary)
-	if err != nil {
-		return nil, err
-	}
-
-	return &summary, nil
-}

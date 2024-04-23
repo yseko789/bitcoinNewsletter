@@ -12,8 +12,6 @@ func (app *application) routes() http.Handler {
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
-	router.HandlerFunc(http.MethodPost, "/v1/summaries", app.insertSummaryHandler)
-	router.HandlerFunc(http.MethodGet, "/v1/summaries/latest", app.getLatestSummaryHandler)
-	router.HandlerFunc(http.MethodGet, "/v1/test/chatgpt", app.testChatgptHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/summaries", app.insertSummaryHandler)
 	return app.recoverPanic(router)
 }

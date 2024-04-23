@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/yseko789/bitcoinNewsletter/internal/data"
 	"github.com/yseko789/bitcoinNewsletter/internal/validator"
+	pb "github.com/yseko789/bitcoinNewsletter/proto"
 )
 
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -138,10 +141,14 @@ func (app *application) sendDailyEmailHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	summaryData := readSummary(grpcClient, app.yesterdaysDateString())
+	summaryContent := summaryData.Content
+	summaryDate := summaryData.Date
+
 	app.background(func() {
 		data := map[string]any{
-			"summaryDate": "01/01/25",
-			"summary":     "abcdefghijklmnopqrstuv",
+			"summaryDate": summaryDate,
+			"summary":     summaryContent,
 		}
 
 		for _, email := range emails {
@@ -156,4 +163,14 @@ func (app *application) sendDailyEmailHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func readSummary(c pb.SummaryServiceClient, date string) *pb.Summary {
+	req := &pb.Date{Date: date}
+	res, err := c.ReadSummary(context.Background(), req)
+
+	if err != nil {
+		log.Printf("Error happened while reading: %v\n", err)
+	}
+	return res
 }
